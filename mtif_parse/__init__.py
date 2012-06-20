@@ -1,4 +1,6 @@
 import codecs
+import types
+
 try:
   from cStringIO import StringIO
   
@@ -36,7 +38,7 @@ class MTIF (object):
           else:
             entry = []
             
-        elif line:
+        else:
           entry.append(line)
           
       else:
@@ -47,6 +49,84 @@ class MTIF (object):
         else:
           raise StopIteration
           
-  def self.parse_entry (entry_list):
-    return entry_list[0]
+  def parse_entry (self, entry_list, multi=False, multi_key=None, allowed_keys=()):
+    ret = {}
+    multi_list = []
+    cnt = 0
+    
+    for e in entry_list:
+      if multi:
+        if e == '-' * 5:
+          if multi_key in ('COMMENT', 'PING'):
+            if multi_key == 'COMMENT':
+              akeys = ('AUTHOR', 'EMAIL', 'URL', 'IP', 'DATE')
+              
+            else:
+              akeys = ('TITLE', 'URL', 'IP', 'BLOG NAME', 'DATE')
+              
+            mret = self.parse_entry(multi_list, multi_key='BODY', allowed_keys=akeys)
+            self.listify(ret, multi_key, mret)
+            
+          else:
+            self.listify(ret, multi_key, '\n'.join(multi_list))
+            
+          multi = False
+            
+        else:
+          
+          multi_list.append(e)
+          if cnt + 1 >= len(entry_list):
+            self.listify(ret, multi_key, '\n'.join(multi_list))
+            
+      else:
+        elems = e.split(':', 1)
+        key = elems[0]
+        value = ''
+        if not key or key == '-' * 5:
+          continue
+        
+        elif allowed_keys and key not in allowed_keys:
+          multi = True
+          multi_list.append(e)
+          if cnt + 1 >= len(entry_list):
+            self.listify(ret, multi_key, '\n'.join(multi_list))
+            
+          cnt+= 1
+          continue
+        
+        elif len(elems) > 1:
+          value = elems[1].strip()
+          
+        if value:
+          self.listify(ret, key, value)
+            
+        elif key in allowed_keys:
+          pass
+          
+        elif key in ('AUTHOR', 'TITLE', 'BASENAME', 'DATE', 'PRIMARY CATEGORY',
+                     'CATEGORY', 'TAGS', 'STATUS', 'ALLOW COMMENTS', 
+                     'ALLOW PINGS', 'CONVERT BREAKS', 'NO ENTRY'
+                     ):
+          self.listify(ret, key, '')
+          
+        else:
+          multi = True
+          multi_list = []
+          multi_key = key
+          
+      cnt+= 1
+      
+    return ret
+    
+  def listify (self, ret, key, value):
+    if ret.has_key(key):
+      if type(ret[key]) is types.ListType:
+        ret[key].append(value)
+        
+      else:
+        ret[key] = [ret[key], value]
+        
+      return None
+      
+    ret[key] = value
     
